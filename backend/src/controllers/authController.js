@@ -11,6 +11,17 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+function getRefreshCookieOptions() {
+  const isProd = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    path: '/',
+  };
+}
+
 async function register(req, res) {
   try {
     const { name, email, password } = req.body;
@@ -44,13 +55,7 @@ async function register(req, res) {
       [user.id, tokenHash, expiresAt]
     );
 
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: '/',
-    });
+    res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
 
     res.status(201).json({
       message: 'Registration successful',
@@ -92,13 +97,7 @@ async function login(req, res) {
       [user.id, tokenHash, expiresAt]
     );
 
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: '/',
-    });
+    res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
 
     res.json({
       message: 'Login successful',
@@ -154,13 +153,7 @@ async function refresh(req, res) {
       [user.id, newTokenHash, expiresAt]
     );
 
-    res.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: '/',
-    });
+    res.cookie('refreshToken', newRefreshToken, getRefreshCookieOptions());
 
     res.json({
       accessToken: newAccessToken,
@@ -180,7 +173,13 @@ async function logout(req, res) {
       await pool.query('DELETE FROM refresh_tokens WHERE token_hash = ?', [tokenHash]);
     }
 
-    res.clearCookie('refreshToken', { path: '/' });
+    const clearOptions = getRefreshCookieOptions();
+    res.clearCookie('refreshToken', {
+      path: clearOptions.path,
+      sameSite: clearOptions.sameSite,
+      secure: clearOptions.secure,
+      httpOnly: clearOptions.httpOnly,
+    });
     res.json({ message: 'Logged out successfully' });
   } catch (err) {
     console.error('Logout error:', err);
